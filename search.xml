@@ -5,9 +5,9 @@
     <url>/2019/12/11/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E9%99%90%E6%B5%81/</url>
     <content><![CDATA[<p>在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：</p>
 <ol>
-<li>限流（rate limit）：限制系统输入输出以达到维持服务稳定的目的；</li>
-<li>熔断（circuite break）：在系统受到过多failing response的时候，拒绝系统输出；</li>
-<li>减载（load shedding）：在系统输入请求响应时间过长的时候，拒绝系统输入。</li>
+<li>限流（Rate limit）：限制系统输入输出以达到维持服务稳定的目的；</li>
+<li>熔断（Circuit break）：在系统受到过多failing response的时候，拒绝系统输出；</li>
+<li>减载（Load shedding）：在系统输入请求响应时间过长的时候，拒绝系统输入。</li>
 </ol>
 <p>一般来说，常见的限流算法有三种：滑动窗口（sliding window），漏桶（leaky bucket）以及令牌桶（token bucket）算法。</p>
 <a id="more"></a>
