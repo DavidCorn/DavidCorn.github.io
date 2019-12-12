@@ -79,17 +79,17 @@
 
 
 
-<meta name="description" content="高并发系统的降级处理——限流在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：  限流（rate limit）：限制系统输入输出以达到维持服务稳定的目的； 熔断（circuite break）：在系统受到过多failing response的时候，拒绝系统输出； 减载（load shedding）：在系统输入请求响应时间过长的时候，拒">
+<meta name="description" content="在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：  限流（rate limit）：限制系统输入输出以达到维持服务稳定的目的； 熔断（circuite break）：在系统受到过多failing response的时候，拒绝系统输出； 减载（load shedding）：在系统输入请求响应时间过长的时候，拒绝系统输入。  一般来说，常">
 <meta property="og:type" content="article">
 <meta property="og:title" content="高并发系统的降级处理——限流">
 <meta property="og:url" content="http:&#x2F;&#x2F;yoursite.com&#x2F;2019&#x2F;12&#x2F;11&#x2F;%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E9%99%90%E6%B5%81&#x2F;index.html">
 <meta property="og:site_name" content="秦少年的博客">
-<meta property="og:description" content="高并发系统的降级处理——限流在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：  限流（rate limit）：限制系统输入输出以达到维持服务稳定的目的； 熔断（circuite break）：在系统受到过多failing response的时候，拒绝系统输出； 减载（load shedding）：在系统输入请求响应时间过长的时候，拒">
+<meta property="og:description" content="在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：  限流（rate limit）：限制系统输入输出以达到维持服务稳定的目的； 熔断（circuite break）：在系统受到过多failing response的时候，拒绝系统输出； 减载（load shedding）：在系统输入请求响应时间过长的时候，拒绝系统输入。  一般来说，常">
 <meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;images&#x2F;sliding_window.jpeg">
 <meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;images&#x2F;leaky_bucket.jpeg">
 <meta property="og:image" content="http:&#x2F;&#x2F;yoursite.com&#x2F;images&#x2F;token_bucket.gif">
 <meta property="article:published_time" content="2019-12-12T07:43:43.000Z">
-<meta property="article:modified_time" content="2019-12-12T08:24:59.950Z">
+<meta property="article:modified_time" content="2019-12-12T08:47:17.109Z">
 <meta property="article:author" content="Qiyao Qin">
 <meta property="article:tag" content="高并发">
 <meta name="twitter:card" content="summary">
@@ -411,7 +411,7 @@
       
 
       
-        <h1 id="高并发系统的降级处理——限流"><a href="#高并发系统的降级处理——限流" class="headerlink" title="高并发系统的降级处理——限流"></a>高并发系统的降级处理——限流</h1><p>在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：</p>
+        <p>在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：</p>
 <ol>
 <li>限流（rate limit）：限制系统输入输出以达到维持服务稳定的目的；</li>
 <li>熔断（circuite break）：在系统受到过多failing response的时候，拒绝系统输出；</li>
@@ -459,6 +459,30 @@
 
     
 
+    
+      <div>
+        <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
+  <div>发家致富，从你做起</div>
+  <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
+    <span>打赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/wechatpay.jpg" alt="Qiyao Qin 微信支付"/>
+        <p>微信支付</p>
+      </div>
+    
+
+    
+
+    
+
+  </div>
+</div>
+
+      </div>
     
 
     
@@ -569,10 +593,10 @@
               
               
               <div class="site-state-item site-state-categories">
-                
+                <a href="/categories/index.html">
                   <span class="site-state-item-count">1</span>
                   <span class="site-state-item-name">分类</span>
-                
+                </a>
               </div>
             
 
@@ -580,10 +604,10 @@
               
               
               <div class="site-state-item site-state-tags">
-                
+                <a href="/tags/index.html">
                   <span class="site-state-item-count">1</span>
                   <span class="site-state-item-name">标签</span>
-                
+                </a>
               </div>
             
 
@@ -591,6 +615,22 @@
 
           
 
+          
+            <div class="links-of-author motion-element">
+                
+                  <span class="links-of-author-item">
+                    <a href="https://github.com/DavidCorn" target="_blank" title="GitHub">
+                      
+                        <i class="fa fa-fw fa-github"></i>GitHub</a>
+                  </span>
+                
+                  <span class="links-of-author-item">
+                    <a href="mailto:qiyaoq@gmail.com" target="_blank" title="E-Mail">
+                      
+                        <i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  </span>
+                
+            </div>
           
 
           
@@ -614,7 +654,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#高并发系统的降级处理——限流"><span class="nav-number">1.</span> <span class="nav-text">高并发系统的降级处理——限流</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#滑动窗口（Sliding-Window）"><span class="nav-number">2.</span> <span class="nav-text">滑动窗口（Sliding Window）</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#漏桶（Leaky-Bucket）"><span class="nav-number">3.</span> <span class="nav-text">漏桶（Leaky Bucket）</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#令牌桶（Token-Bucket）"><span class="nav-number">4.</span> <span class="nav-text">令牌桶（Token Bucket）</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#漏桶-vs-令牌桶"><span class="nav-number">5.</span> <span class="nav-text">漏桶 vs 令牌桶</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Reference"><span class="nav-number">6.</span> <span class="nav-text">Reference</span></a></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#滑动窗口（Sliding-Window）"><span class="nav-number">1.</span> <span class="nav-text">滑动窗口（Sliding Window）</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#漏桶（Leaky-Bucket）"><span class="nav-number">2.</span> <span class="nav-text">漏桶（Leaky Bucket）</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#令牌桶（Token-Bucket）"><span class="nav-number">3.</span> <span class="nav-text">令牌桶（Token Bucket）</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#漏桶-vs-令牌桶"><span class="nav-number">4.</span> <span class="nav-text">漏桶 vs 令牌桶</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#Reference"><span class="nav-number">5.</span> <span class="nav-text">Reference</span></a></li></ol></div>
             
 
           </div>
