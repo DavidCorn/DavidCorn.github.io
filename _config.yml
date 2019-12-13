@@ -8,7 +8,7 @@ subtitle: ''
 description: 'Tech, live, fun, etc.'
 keywords:
 author: Qiyao Qin
-language: zh-Hans
+language: zh-CN
 timezone: ''
 
 # URL
@@ -92,7 +92,7 @@ ignore:
 # Extensions
 ## Plugins: https://hexo.io/plugins/
 ## Themes: https://hexo.io/themes/
-theme: next
+theme: Butterfly 
 
 # Deployment
 ## Docs: https://hexo.io/docs/deployment.html
