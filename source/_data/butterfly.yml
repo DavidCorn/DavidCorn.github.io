@@ -155,7 +155,7 @@ post_copyright:
 
 # 自動節選
 auto_excerpt:
-  enable: true
+  enable: false 
   length: 150
 
 ####    Share System    ####
@@ -223,7 +223,7 @@ since: 2019
 footer_custom_text: 嗝。
 
 footer_copyright:
-  enable: true
+  enable: false 
 
 ICP:
   enable: false
@@ -436,7 +436,7 @@ aside:
 
 # 網站公告
 announcement:
-  content: 欢迎分享，打赏，转载么么哒
+  content: 欢迎留言，打赏，转载么么哒
 
 # busuanzi count for PV / UV in site
 # 訪問人數

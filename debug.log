@@ -10097,3 +10097,5 @@
 {"name":"hexo","hostname":"qiyaoq-C02YT5XHLVDQ","pid":84419,"level":20,"msg":"Generator: \u001b[35mbaidusitemap\u001b[39m","time":"2019-12-16T01:21:27.639Z","v":0}
 {"name":"hexo","hostname":"qiyaoq-C02YT5XHLVDQ","pid":84419,"level":20,"msg":"Generator: \u001b[35msitemap\u001b[39m","time":"2019-12-16T01:21:27.639Z","v":0}
 {"name":"hexo","hostname":"qiyaoq-C02YT5XHLVDQ","pid":84419,"level":20,"msg":"Generator: \u001b[35masset\u001b[39m","time":"2019-12-16T01:21:27.641Z","v":0}
+{"name":"hexo","hostname":"qiyaoq-C02YT5XHLVDQ","pid":84419,"level":30,"msg":"Bye!","time":"2019-12-16T01:22:00.044Z","v":0}
+{"name":"hexo","hostname":"qiyaoq-C02YT5XHLVDQ","pid":84419,"level":20,"msg":"Database saved","time":"2019-12-16T01:22:00.098Z","v":0}

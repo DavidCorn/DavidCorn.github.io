@@ -1,12 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>高并发系统的降级处理——熔断</title>
+    <url>/2019/12/15/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E7%86%94%E6%96%AD/</url>
+    <content><![CDATA[<p>在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：</p>
+<ol>
+<li>限流（Rate limit）：限制系统输入输出以达到维持服务稳定的目的；</li>
+<li>熔断（Circuit break）：在系统受到过多failing response的时候，拒绝系统输出；</li>
+<li>减载（Load shedding）：在系统输入请求响应时间过长的时候，拒绝系统输入。</li>
+</ol>
+<p>熔断的作用是阻止服务发送过多可能失败的请求 (The Circuit Breaker pattern prevents an application from performing an operation that is likely to fail)。本文从开源代码 <a href="https://github.com/sony/gobreaker" target="_blank" rel="noopener">sony/gobreaker</a> <sup>[1]</sup>出发，介绍熔断器的工作原理和机制。</p>
+<h1 id="设计要求-Requirements"><a href="#设计要求-Requirements" class="headerlink" title="设计要求 (Requirements)"></a>设计要求 (Requirements)</h1><p>分布式系统中，一般的故障场景例如网络波动（slow network connection），请求超时（timeout）或者过载（overload）等等都可能是暂时性的问题，能够通过系统自修复或者云系统的延展性（horizontal/vertical scaling）等等方式解决。熔断器（Circuit Breaker）是为了解决一些不可预测、难以自修复的故障，比如系统下游服务不可用，数据库宕机等等。另外，熔断器也能有效地阻止连锁反应（cascading failure）的发生。比如当网关（gateway）某一个下游服务不可用，系统不断发送请求并不断重试，可能会导致网关服务占用过多资源内存导致整体崩溃；下游服务如果只是部分不可用，过多的失败请求也会导致下游服务崩溃。</p>
+<p>设计一个熔断器要求能够在故障时迅速反应，并且在故障恢复后能够自动恢复。</p>
+<h1 id="状态机-State-machine"><a href="#状态机-State-machine" class="headerlink" title="状态机 (State machine)"></a>状态机 (State machine)</h1><p>熔断器其实是一个小型的状态机，随着请求返回状态码动态进行状态的调整。状态可以分为三类：闭合（Closed），开启（Open），半开（Half-open）。相互关系如下图<sup>[2]</sup>所示。</p>
+<p><img alt="Circuit breaker state machine" title="Circuit breaker state machine" data-src="/images/circuit_breaker.png" class="lazyload"></p>
+<p>每次请求到来的时候熔断器会有两个内置函数<code>before_request</code>以及<code>after_request</code>。<code>before_request</code>在请求前进行调用，根据状态决定是否截断请求，并记录请求数量。<code>after_request</code>作用在请求结束之后，负责根据请求返回状态码进行状态和计数器的更新。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// Execute runs the given request if the CircuitBreaker accepts it.</span></span><br><span class="line"><span class="comment">// Execute returns an error instantly if the CircuitBreaker rejects the request.</span></span><br><span class="line"><span class="comment">// Otherwise, Execute returns the result of the request.</span></span><br><span class="line"><span class="comment">// If a panic occurs in the request, the CircuitBreaker handles it as an error</span></span><br><span class="line"><span class="comment">// and causes the same panic again.</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(cb *CircuitBreaker)</span> <span class="title">Execute</span><span class="params">(req <span class="keyword">func</span>()</span> <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span>) <span class="params">(<span class="keyword">interface</span>&#123;&#125;, error)</span></span> &#123;</span><br><span class="line">	generation, err := cb.beforeRequest()</span><br><span class="line">	<span class="comment">//...</span></span><br><span class="line">	</span><br><span class="line">	<span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">		e := <span class="built_in">recover</span>()</span><br><span class="line">		<span class="keyword">if</span> e != <span class="literal">nil</span> &#123;</span><br><span class="line">			cb.afterRequest(generation, <span class="literal">false</span>)</span><br><span class="line">			<span class="built_in">panic</span>(e)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;()</span><br><span class="line"></span><br><span class="line">	cb.afterRequest(generation, err == <span class="literal">nil</span>)</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="闭合（Closed）"><a href="#闭合（Closed）" class="headerlink" title="闭合（Closed）"></a>闭合（Closed）</h2><p>熔断器闭合时系统能够正常发送请求，闭合状态下熔断器会维护一个最近失败的请求数量。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="comment">// Counts holds the numbers of requests and their successes/failures.</span></span><br><span class="line"><span class="comment">// CircuitBreaker clears the internal Counts either</span></span><br><span class="line"><span class="comment">// on the change of the state or at the closed-state intervals.</span></span><br><span class="line"><span class="comment">// Counts ignores the results of the requests sent before clearing.</span></span><br><span class="line"><span class="keyword">type</span> Counts <span class="keyword">struct</span> &#123;</span><br><span class="line">	Requests             <span class="keyword">uint32</span></span><br><span class="line">	TotalSuccesses       <span class="keyword">uint32</span></span><br><span class="line">	TotalFailures        <span class="keyword">uint32</span></span><br><span class="line">	ConsecutiveSuccesses <span class="keyword">uint32</span></span><br><span class="line">	ConsecutiveFailures  <span class="keyword">uint32</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>每次请求到来时将会更新成功或者失败状态的数量。一旦请求失败数量超过某一个阈值，熔断器将会进入开启（Open）状态。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(cb *CircuitBreaker)</span> <span class="title">onFailure</span><span class="params">(state State, now time.Time)</span></span> &#123;</span><br><span class="line">	<span class="keyword">switch</span> state &#123;</span><br><span class="line">	<span class="keyword">case</span> StateClosed:</span><br><span class="line">		cb.counts.onFailure()</span><br><span class="line">		<span class="keyword">if</span> cb.readyToTrip(cb.counts) &#123;</span><br><span class="line">			cb.setState(StateOpen, now)</span><br><span class="line">		&#125;</span><br><span class="line">	<span class="comment">// ...</span></span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="开启（Open）"><a href="#开启（Open）" class="headerlink" title="开启（Open）"></a>开启（Open）</h2><p>熔断器开启后所有请求立刻失败并抛出异常。系统在设定开启状态时会给熔断器设置一个<code>expire time</code>，一旦熔断器处于开启状态时间超过<code>expire time</code>，将会自动转入半开状态。这样做的好处是可以让断路器自行检查下游服务可用性。</p>
+<h2 id="半开（Half-open）"><a href="#半开（Half-open）" class="headerlink" title="半开（Half open）"></a>半开（Half open）</h2><p>一旦断路器开启状态超时便会进入半开状态。在半开状态下系统会限量发送请求，一旦请求连续成功达到某一个阈值，熔断器将会恢复闭合状态并发送所有请求。一旦有请求失败熔断器将回滚至开启状态并重置计时器。</p>
+<figure class="highlight go"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(cb *CircuitBreaker)</span> <span class="title">onSuccess</span><span class="params">(state State, now time.Time)</span></span> &#123;</span><br><span class="line">	<span class="comment">//...</span></span><br><span class="line">	<span class="keyword">case</span> StateHalfOpen:</span><br><span class="line">		cb.counts.onSuccess()</span><br><span class="line">		<span class="keyword">if</span> cb.counts.ConsecutiveSuccesses &gt;= cb.maxRequests &#123;</span><br><span class="line">			cb.setState(StateClosed, now)</span><br><span class="line">		&#125;</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h1><ul>
+<li>[1] <a href="https://github.com/sony/gobreaker" target="_blank" rel="noopener">https://github.com/sony/gobreaker</a> “Circuit Breaker implemented in Go”</li>
+<li>[2] <a href="https://docs.microsoft.com/en-us/previous-versions/msp-n-p/dn589784(v=pandp.10)?redirectedfrom=MSDN" target="_blank" rel="noopener">https://docs.microsoft.com/en-us/previous-versions/msp-n-p/dn589784(v=pandp.10)?redirectedfrom=MSDN</a> “Circuit Breaker Pattern”</li>
+</ul>
+]]></content>
+      <categories>
+        <category>系统设计</category>
+      </categories>
+      <tags>
+        <tag>高并发</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>高并发系统的降级处理——限流</title>
     <url>/2019/12/11/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E9%99%90%E6%B5%81/</url>
     <content><![CDATA[<p>在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：</p>
 <ol>
 <li>限流（Rate limit）：限制系统输入输出以达到维持服务稳定的目的；</li>
-<li>熔断（Circuit break）：在系统受到过多failing response的时候，拒绝系统输出；</li>
+<li>熔断（Circuit break）：在系统收到过多failing response的时候，拒绝系统输出；</li>
 <li>减载（Load shedding）：在系统输入请求响应时间过长的时候，拒绝系统输入。</li>
 </ol>
 <p>一般来说，常见的限流算法有三种：滑动窗口（sliding window），漏桶（leaky bucket）以及令牌桶（token bucket）算法。</p>
@@ -16,7 +55,7 @@
 <p>每个格子内会记录到底的请求，请求到来的时候会首先查看当前1s内总访问量，如果超过100s则进入缓存等待或者丢弃，否则队尾格子进行计数。</p>
 <p>滑动窗口算法的优势在于实现简单，内存友好。存在的问题是精度由格子的粒度决定。格子细粒度越高，窗口滑动越平滑，限流统计就越精确。</p>
 <p><img alt="Sliding Window 原理图" title="Sliding Window 原理图" data-src="/images/sliding_window.jpeg" class="lazyload"></p>
-<h1 id="漏桶（Leaky-Bucket）"><a href="#漏桶（Leaky-Bucket）" class="headerlink" title="漏桶（Leaky Bucket）"></a>漏桶（Leaky Bucket）</h1><p>漏桶算法的核心逻辑为以下几点：</p>
+<h1 id="漏桶（Leaky-Bucket）"><a href="#漏桶（Leaky-Bucket）" class="headerlink" title="漏桶（Leaky Bucket）"></a>漏桶（Leaky Bucket）</h1><p>漏桶算法<sup>[1]</sup>的核心逻辑为以下几点：</p>
 <ol>
 <li>实现了一个固定容量的桶；</li>
 <li>桶的输出速率保证恒定，一旦桶内请求为空则停止输出；</li>
@@ -24,9 +63,9 @@
 </ol>
 <p><img alt="Leaky Bucket 原理图" title="Leaky Bucket 原理图" data-src="/images/leaky_bucket.jpeg" class="lazyload"></p>
 <p>漏桶的实现在单机上可以利用队列（queue）完成，分布式环境可以使用Redis或者其他消息中间件。</p>
-<h1 id="令牌桶（Token-Bucket）"><a href="#令牌桶（Token-Bucket）" class="headerlink" title="令牌桶（Token Bucket）"></a>令牌桶（Token Bucket）</h1><p>令牌桶根据令牌的数量来控制请求速率。每秒钟会平均往桶内放n个令牌，每次请求到达会消耗掉桶内X个令牌，一旦桶内剩余令牌≤X则请求放入缓存区等待或者丢弃。</p>
+<h1 id="令牌桶（Token-Bucket）"><a href="#令牌桶（Token-Bucket）" class="headerlink" title="令牌桶（Token Bucket）"></a>令牌桶（Token Bucket）</h1><p>令牌桶<sup>[1]</sup>根据令牌的数量来控制请求速率。每秒钟会平均往桶内放n个令牌，每次请求到达会消耗掉桶内X个令牌，一旦桶内剩余令牌≤X则请求放入缓存区等待或者丢弃。</p>
 <p><img alt="[Token Bucket 原理图](https://www.quora.com/What-is-the-difference-between-token-bucket-and-leaky-bucket-algorithms)" title="Token Bucket 原理图" data-src="/images/token_bucket.gif" class="lazyload"></p>
-<p>令牌桶对于不同突发状况有比较好的处理能力，以Google的Java开源项目<a href="https://github.com/google/guava/blob/master/guava/src/com/google/common/util/concurrent/RateLimiter.java" target="_blank" rel="noopener">Guava</a>为例，针对RateLimiter提供了两个实用的子类：平滑突发限流（SmoothBusrty）和平滑预热限流（SmoothWarmingUp）。</p>
+<p>令牌桶对于不同突发状况有比较好的处理能力，以Google的Java开源项目<a href="https://github.com/google/guava/blob/master/guava/src/com/google/common/util/concurrent/RateLimiter.java" target="_blank" rel="noopener">Guava</a><sup>[4]</sup>为例，针对RateLimiter提供了两个实用的子类：平滑突发限流（SmoothBusrty）和平滑预热限流（SmoothWarmingUp）。</p>
 <p>SmoothBursty能够很好地应对突发流量。当流量突然变大的时候，会立刻消耗掉桶内令牌，之后流量输出取决于令牌自增速率，达到一个平缓的输出速率；当流量突然变小的时候，流量会立即消耗掉桶内令牌。输出流量会呈现一个逼近恒定速率的趋势，但是具体速率由实时系统流量和令牌自增速率共同<strong>动态</strong>决定。</p>
 <p>SmoothWarmingUp适用于<strong>下游服务需要预热</strong>的场景。创建限流器的时候可以设定参数如下：</p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 令牌自增速率为2个/秒，缓冲时间为3s</span></span><br><span class="line">RateLimiter r = RateLimiter.create(<span class="number">2</span>,<span class="number">3</span>,TimeUnit.SECONDS);</span><br></pre></td></tr></table></figure>
