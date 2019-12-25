@@ -11,7 +11,7 @@
 </ol>
 <p>一旦系统处理速度小于系统每秒接收的请求数量（processing speed &lt; QPS），内存队列中的请求将逐渐累积，当请求不断增加没有及时释放，系统会遇到延迟增高，阻塞，内存溢出等等问题。因此系统可以建立一种机制，在响应时间变长时拒绝接收请求防止系统过载。</p>
 <p>Facebook 有一篇非常有名的paper <sup>[1]</sup>提供了集中策略来设计系统减载方案（loadshedding）。主要里用到的技术包含Control Delay（CoDel）和Adaptive LIFO。</p>
-<p>#Control Delay<br>一般来说服务器会有内存或者资源池数量的限制，并将没有来得及处理的请求放在缓冲区。一旦处理请求的速度跟不上到来的请求，队列将会越来越大并且最终超过使用闲置。Facebook根据CoDel的启发设计了一套算法：</p>
+<h1 id="Control-Delay"><a href="#Control-Delay" class="headerlink" title="Control Delay"></a>Control Delay</h1><p>一般来说服务器会有内存或者资源池数量的限制，并将没有来得及处理的请求放在缓冲区。一旦处理请求的速度跟不上到来的请求，队列将会越来越大并且最终超过使用闲置。Facebook根据CoDel的启发设计了一套算法：</p>
 <ol>
 <li>当内存缓冲队列在过去的N毫秒内没有被清空，则queue中请求的timeout则被设置为M毫秒（一般为10-30ms）；</li>
 <li>(Optional) 当内存缓冲队列在过去的N毫秒内被清空，则queue中请求的timeout被设置成N毫秒。</li>
@@ -19,11 +19,10 @@
 <p>伪代码如下：</p>
 <figure class="highlight python"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">onNewRequest</span><span class="params">(req, queue)</span>:</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (queue.lastEmptyTime() &lt; (now - N seconds)) &#123;</span><br><span class="line">     timeout = M ms</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">     timeout = N seconds;</span><br><span class="line">  &#125;</span><br><span class="line">  queue.enqueue(req, timeout)</span><br></pre></td></tr></table></figure>
 
-<p>#Adaptive LIFO<br>大部分系统处理请求遵循FIFO (First In Last Out) 原则。在峰值流量太大时，后来的请求可能会因为先来请求的阻塞而导致请求耗时更长。对此Facebook提出的方案是adaptive LIFO (Last In First Out) ，当系统出现队列请求积压的时候，将队列模式自动切换为LIFO，后到的请求首先执行，最大限度上增加了请求成功的可能性。</p>
+<h1 id="Adaptive-LIFO"><a href="#Adaptive-LIFO" class="headerlink" title="Adaptive LIFO"></a>Adaptive LIFO</h1><p>大部分系统处理请求遵循FIFO (First In Last Out) 原则。在峰值流量太大时，后来的请求可能会因为先来请求的阻塞而导致请求耗时更长。对此Facebook提出的方案是adaptive LIFO (Last In First Out) ，当系统出现队列请求积压的时候，将队列模式自动切换为LIFO，后到的请求首先执行，最大限度上增加了请求成功的可能性。</p>
 <p>Adaptive LIFO与CoDel能够非常好的兼容，如下图所示。CoDel设置较短timeout，防止队列积压过多请求，adaptive LIFO将后入的请求率先处理，最大限度增加请求成功的概率。Facebook的PHP runtime virtual machine <sup>[2]</sup>以及thrift <sup>[3]</sup> framework都用到了这种算法。</p>
 <p><img alt="Adaptive LIFO" title="Adaptive LIFO" data-src="/images/adaptive_lifo.png" class="lazyload"></p>
-<p>#Reference</p>
-<ul>
+<h1 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h1><ul>
 <li>[1] <a href="https://queue.acm.org/detail.cfm?id=2839461" target="_blank" rel="noopener">https://queue.acm.org/detail.cfm?id=2839461</a> “Fail at Scale”</li>
 <li>[2] <a href="https://github.com/facebook/hhvm/blob/43c20856239cedf842b2560fd768038f52b501db/hphp/util/job-queue.h#L75" target="_blank" rel="noopener">https://github.com/facebook/hhvm/blob/43c20856239cedf842b2560fd768038f52b501db/hphp/util/job-queue.h#L75</a> “A virtual machine for executing programs written in Hack”</li>
 <li>[3] <a href="https://github.com/facebook/fbthrift" target="_blank" rel="noopener">https://github.com/facebook/fbthrift</a> “Facebook Thrift”</li>
