@@ -7,6 +7,6 @@ Disallow: /fonts/
 Disallow: /vendors/
 Disallow: /fancybox/
 
-Sitemap: http://thief.one/sitemap.xml
-Sitemap: http://thief.one/baidusitemap.xml
+Sitemap: http://qinqiyao.com/sitemap.xml
+Sitemap: http://qinqiyao.com/baidusitemap.xml
 
