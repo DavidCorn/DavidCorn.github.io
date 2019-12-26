@@ -1,79 +1,120 @@
-extends includes/layout.pug
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"><title>高并发系统的降级处理——限流 | 秦少年的博客</title><meta name="description" content="一般来说，常见的限流（Rate limiting）算法有三种：滑动窗口（sliding window），漏桶（leaky bucket）以及令牌桶（token bucket）算法。"><meta name="keywords" content="高并发"><meta name="author" content="Qiyao Qin"><meta name="copyright" content="Qiyao Qin"><meta name="format-detection" content="telephone=no"><link rel="shortcut icon" href="/img/favicon.ico"><link rel="preconnect" href="//cdn.jsdelivr.net"><meta name="google-site-verification" content="PWQ1yLiuc_CfANusvurPYyvSg56SLMe3Ar6XvPcn5fw"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="高并发系统的降级处理——限流"><meta name="twitter:description" content="一般来说，常见的限流（Rate limiting）算法有三种：滑动窗口（sliding window），漏桶（leaky bucket）以及令牌桶（token bucket）算法。"><meta name="twitter:image" content="http://qinqiyao.com/images/rate_limiter.png"><meta property="og:type" content="article"><meta property="og:title" content="高并发系统的降级处理——限流"><meta property="og:url" content="http://qinqiyao.com/2019/12/11/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E9%99%90%E6%B5%81/"><meta property="og:site_name" content="秦少年的博客"><meta property="og:description" content="一般来说，常见的限流（Rate limiting）算法有三种：滑动窗口（sliding window），漏桶（leaky bucket）以及令牌桶（token bucket）算法。"><meta property="og:image" content="http://qinqiyao.com/images/rate_limiter.png"><meta http-equiv="Cache-Control" content="no-transform"><meta http-equiv="Cache-Control" content="no-siteapp"><script src="https://cdn.jsdelivr.net/npm/js-cookie/dist/js.cookie.min.js"></script><script>const autoChangeMode = '1'
+var t = Cookies.get("theme");
+if (autoChangeMode == '1'){
+const isDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches
+const isLightMode = window.matchMedia("(prefers-color-scheme: light)").matches
+const isNotSpecified = window.matchMedia("(prefers-color-scheme: no-preference)").matches
+const hasNoSupport = !isDarkMode && !isLightMode && !isNotSpecified
 
-block top_img
-  - var top_img =  page.top_img || page.cover || theme.post_meta.top_img || theme.default_top_img
-  - var bg_img = top_img !== true ? `background-image: url(${top_img})` : ''
-  div#top-container(style=bg_img)
-    #post-info
-      #post-title
-          .posttitle= page.title || _p('no_title')
-      #post-meta
-        if (theme.post_meta.date_type)
-          if (theme.post_meta.date_type === 'both')
-            time.post-meta__date
-              i.fa.fa-calendar(aria-hidden="true")
-              =' '+_p('post.created')+' '+date(page.date, config.date_format)
-              span.post-meta__separator |
-              i.fa.fa-history(aria-hidden="true")
-              =' '+_p('post.updated')+' '+date(page.updated, config.date_format)
-          else
-            - var date_type = theme.post_meta.date_type === 'updated' ? 'updated' : 'date'
-            time.post-meta__date #[i.fa.fa-calendar(aria-hidden="true")] #[=date(page[date_type], config.date_format)]
-                  
-        if (theme.post_meta.categories && page.categories.data.length > 0)
-          if (theme.post_meta.date_type)
-            span.post-meta__separator.mobile_hidden |
-          span.mobile_hidden
-            each item, index in page.categories.data
-              i.fa.fa-inbox.post-meta__icon(aria-hidden="true")
-              a(href=url_for(item.path)).post-meta__categories #[=item.name]
-              if (index < page.categories.data.length - 1)
-                i.fa.fa-angle-right(aria-hidden="true")
-        .post-meta-wordcount
-          if (theme.wordcount && theme.wordcount.enable)
-            i.fa.fa-file-word-o.post-meta__icon(aria-hidden="true")
-            span= _p('post.wordcount') + ': '
-            span.word-count= wordcount(page.content)
-            span.post-meta__separator |
-            i.fa.fa-clock-o.post-meta__icon(aria-hidden="true")
-            span= _p('post.min2read', min2read(page.content, {cn: 350, en: 160}))
-          if (theme.wordcount && theme.wordcount.enable && theme.busuanzi.page_pv)
-            span.post-meta__separator |
-          if theme.busuanzi.page_pv
-            i.fa.fa-eye.post-meta__icon(aria-hidden="true")        
-            span= _p('post.page_pv') + ': '
-            span#busuanzi_value_page_pv
+if (t === undefined){
+  if (isLightMode) activateLightMode()
+  else if (isDarkMode) activateDarkMode()
+  else if (isNotSpecified || hasNoSupport){
+    console.log('You specified no preference for a color scheme or your browser does not support it. I Schedule dark mode during night time.')
+    now = new Date();
+    hour = now.getHours();
+    isNight = hour < 6 || hour >= 18
+    isNight ? activateDarkMode() : activateLightMode()
+}
+} else if (t == 'light') activateLightMode()
+else activateDarkMode()
 
 
-block content
-  article#post(class="")
-    #post-content.article-container!= page.content
-  if (theme.post_copyright && theme.post_copyright.enable && page.copyright != false)
-    .post-copyright
-      .post-copyright__author
-        span.post-copyright-meta= _p('post.copyright.author') + ": "
-        span.post-copyright-info
-          a(href=`mailto:${config.email}`) #[=config.author]
-      .post-copyright__type
-        span.post-copyright-meta= _p('post.copyright.link') + ": "
-        span.post-copyright-info
-          a(href=url_for(page.permalink)) #[=page.permalink]
-      .post-copyright__notice
-        span.post-copyright-meta= _p('post.copyright.copyright_notice') + ": "
-        span.post-copyright-info!= _p('post.copyright.copyright_content', theme.post_copyright.license_url, theme.post_copyright.license, config.url, config.title)
+} else if (autoChangeMode == '2'){
+  now = new Date();
+  hour = now.getHours();
+  isNight = hour < 6 || hour >= 18
+  if(t === undefined) isNight? activateDarkMode() : activateLightMode()
+  else if (t === 'light') activateLightMode()
+  else activateDarkMode() 
+} else {
+  if ( t == 'dark' ) activateDarkMode()
+  else if ( t == 'light') activateLightMode()
+}
+
+function activateDarkMode(){
+  document.documentElement.setAttribute('data-theme', 'dark')
+  if (document.querySelector('meta[name="theme-color"]') !== null){
+    document.querySelector('meta[name="theme-color"]').setAttribute('content','#000')
+  }
+}
+function activateLightMode(){
+  document.documentElement.setAttribute('data-theme', 'light')
+  if (document.querySelector('meta[name="theme-color"]') !== null){
+  document.querySelector('meta[name="theme-color"]').setAttribute('content','#fff')
+  }
+}</script><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@latest/css/font-awesome.min.css"><link rel="canonical" href="http://qinqiyao.com/2019/12/11/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E9%99%90%E6%B5%81/"><link rel="prev" title="高并发系统的降级处理——熔断" href="http://qinqiyao.com/2019/12/15/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E7%86%94%E6%96%AD/"><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Titillium+Web"><script>var GLOBAL_CONFIG = { 
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"search.xml","languages":{"hits_empty":"找不到您查询的内容:${query}"}},
+  translate: undefined,
+  highlight_copy: 'true',
+  highlight_lang: 'true',
+  highlight_shrink: 'false',
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  bookmark: {
+    title: 'Snackbar.bookmark.title',
+    message_prev: '按',
+    message_next: '键将本页加入书签'
+  },
+  runtime_unit: '天',
+  copyright: undefined,
+  copy_copyright_js: false,
+  ClickShowText: undefined,
+  medium_zoom: 'true',
+  Snackbar: undefined
   
-  .tag_share
-    if (theme.post_meta.tags)
-      .post-meta__tag-list
-        each item, index in page.tags.data
-          a(href=url_for(item.path)).post-meta__tags #[=item.name]    
-    include includes/share/index.pug
-        
-  if theme.reward.enable
-    include includes/reward.pug
-  include includes/pagination.pug
-  
-  if theme.related_post && theme.related_post.enable
-    != related_posts(page,site.posts)
-  if page.comments !== false
-    include includes/comments/index.pug
+}</script><meta name="generator" content="Hexo 4.1.1"></head><body><div id="header"> <div id="page-header"><span class="pull_left" id="blog_name"><a class="blog_title" id="site-name" href="/">秦少年的博客</a></span><i class="fa fa-bars fa-fw toggle-menu pull_right close" aria-hidden="true"></i><span class="pull_right menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fa fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fa fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fa fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fa fa-heart"></i><span> 关于</span></a></div></div></span><span class="pull_right" id="search_button"><a class="site-page social-icon search"><i class="fa fa-search fa-fw"></i><span> 搜索</span></a></span></div></div><div id="mobile-sidebar"><div id="menu_mask"></div><div id="mobile-sidebar-menus"><div class="mobile_author_icon"><img class="lazyload avatar_img" src="/images/avatar.png" onerror="onerror=null;src='/img/friend_404.gif'"></div><div class="mobile_post_data"><div class="mobile_data_item is_center"><div class="mobile_data_link"><a href="/archives/"><div class="headline">文章</div><div class="length_num">4</div></a></div></div><div class="mobile_data_item is_center">      <div class="mobile_data_link"><a href="/tags/"><div class="headline">标签</div><div class="length_num">1</div></a></div></div><div class="mobile_data_item is_center">     <div class="mobile_data_link"><a href="/categories/"><div class="headline">分类</div><div class="length_num">2</div></a></div></div></div><hr><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fa fa-home"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fa fa-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fa fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fa fa-heart"></i><span> 关于</span></a></div></div></div><div id="mobile-sidebar-toc"><div class="toc_mobile_headline">目录</div><ol class="toc_mobile_items"><li class="toc_mobile_items-item toc_mobile_items-level-1"><a class="toc_mobile_items-link" href="#滑动窗口（Sliding-Window）"><span class="toc_mobile_items-number">1.</span> <span class="toc_mobile_items-text">滑动窗口（Sliding Window）</span></a></li><li class="toc_mobile_items-item toc_mobile_items-level-1"><a class="toc_mobile_items-link" href="#漏桶（Leaky-Bucket）"><span class="toc_mobile_items-number">2.</span> <span class="toc_mobile_items-text">漏桶（Leaky Bucket）</span></a></li><li class="toc_mobile_items-item toc_mobile_items-level-1"><a class="toc_mobile_items-link" href="#令牌桶（Token-Bucket）"><span class="toc_mobile_items-number">3.</span> <span class="toc_mobile_items-text">令牌桶（Token Bucket）</span></a></li><li class="toc_mobile_items-item toc_mobile_items-level-1"><a class="toc_mobile_items-link" href="#漏桶-vs-令牌桶"><span class="toc_mobile_items-number">4.</span> <span class="toc_mobile_items-text">漏桶 vs 令牌桶</span></a></li><li class="toc_mobile_items-item toc_mobile_items-level-1"><a class="toc_mobile_items-link" href="#Reference"><span class="toc_mobile_items-number">5.</span> <span class="toc_mobile_items-text">Reference</span></a></li></ol></div></div><div id="body-wrap"><i class="fa fa-arrow-right" id="toggle-sidebar" aria-hidden="true">     </i><div class="auto_open" id="sidebar"><div class="sidebar-toc"><div class="sidebar-toc__title">目录</div><div class="sidebar-toc__progress"><span class="progress-notice">你已经读了</span><span class="progress-num">0</span><span class="progress-percentage">%</span><div class="sidebar-toc__progress-bar">     </div></div><div class="sidebar-toc__content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#滑动窗口（Sliding-Window）"><span class="toc-number">1.</span> <span class="toc-text">滑动窗口（Sliding Window）</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#漏桶（Leaky-Bucket）"><span class="toc-number">2.</span> <span class="toc-text">漏桶（Leaky Bucket）</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#令牌桶（Token-Bucket）"><span class="toc-number">3.</span> <span class="toc-text">令牌桶（Token Bucket）</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#漏桶-vs-令牌桶"><span class="toc-number">4.</span> <span class="toc-text">漏桶 vs 令牌桶</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Reference"><span class="toc-number">5.</span> <span class="toc-text">Reference</span></a></li></ol></div></div></div><div id="content-outer"><div id="top-container" style="background-image: url(/images/rate_limiter.png)"><div id="post-info"><div id="post-title"><div class="posttitle">高并发系统的降级处理——限流</div></div><div id="post-meta"><time class="post-meta__date"><i class="fa fa-calendar" aria-hidden="true"></i> 发表于 2019-12-11<span class="post-meta__separator">|</span><i class="fa fa-history" aria-hidden="true"></i> 更新于 2019-12-24</time><span class="post-meta__separator mobile_hidden">|</span><span class="mobile_hidden"><i class="fa fa-inbox post-meta__icon" aria-hidden="true"></i><a class="post-meta__categories" href="/categories/%E7%B3%BB%E7%BB%9F%E8%AE%BE%E8%AE%A1/">系统设计</a></span><div class="post-meta-wordcount"><i class="fa fa-eye post-meta__icon" aria-hidden="true">       </i><span>阅读量: </span><span id="busuanzi_value_page_pv"></span></div></div></div></div><div class="layout layout_post" id="content-inner">   <article id="post"><div class="article-container" id="post-content"><p>在服务器流量波动的情况下，我们需要根据下游服务器容量、业务要求等等对系统进行策略性的保护。保护策略有很多种，包括：</p>
+<ol>
+<li>限流（Rate limit）：限制系统输入输出以达到维持服务稳定的目的；</li>
+<li>熔断（Circuit break）：在系统收到过多failing response的时候，拒绝系统输出；</li>
+<li>减载（Load shedding）：在系统输入请求响应时间过长的时候，拒绝系统输入。</li>
+</ol>
+<p>一般来说，常见的限流算法有三种：滑动窗口（sliding window），漏桶（leaky bucket）以及令牌桶（token bucket）算法。</p>
+<a id="more"></a>
+
+<h1 id="滑动窗口（Sliding-Window）"><a href="#滑动窗口（Sliding-Window）" class="headerlink" title="滑动窗口（Sliding Window）"></a>滑动窗口（Sliding Window）</h1><p>滑动窗口算法比较简单粗暴。比方说我们需要100 qps的限流，我们将1s分为十个100ms的格子，格子之间通过链表（linkedlist）的方式连接。然后我们设置一个1s的窗口，每100ms在链表尾部新加一个格子，然后删掉队头的格子，保证1s的窗口内始终有十个格子。</p>
+<p>每个格子内会记录到底的请求，请求到来的时候会首先查看当前1s内总访问量，如果超过100s则进入缓存等待或者丢弃，否则队尾格子进行计数。</p>
+<p>滑动窗口算法的优势在于实现简单，内存友好。存在的问题是精度由格子的粒度决定。格子细粒度越高，窗口滑动越平滑，限流统计就越精确。</p>
+<p><img alt="Sliding Window 原理图" title="Sliding Window 原理图" data-src="/images/sliding_window.jpeg" class="lazyload"></p>
+<h1 id="漏桶（Leaky-Bucket）"><a href="#漏桶（Leaky-Bucket）" class="headerlink" title="漏桶（Leaky Bucket）"></a>漏桶（Leaky Bucket）</h1><p>漏桶算法<sup>[1]</sup>的核心逻辑为以下几点：</p>
+<ol>
+<li>实现了一个固定容量的桶；</li>
+<li>桶的输出速率保证恒定，一旦桶内请求为空则停止输出；</li>
+<li>一旦桶溢出，则溢出流量会被丢弃。</li>
+</ol>
+<p><img alt="Leaky Bucket 原理图" title="Leaky Bucket 原理图" data-src="/images/leaky_bucket.jpeg" class="lazyload"></p>
+<p>漏桶的实现在单机上可以利用队列（queue）完成，分布式环境可以使用Redis或者其他消息中间件。</p>
+<h1 id="令牌桶（Token-Bucket）"><a href="#令牌桶（Token-Bucket）" class="headerlink" title="令牌桶（Token Bucket）"></a>令牌桶（Token Bucket）</h1><p>令牌桶<sup>[1]</sup>根据令牌的数量来控制请求速率。每秒钟会平均往桶内放n个令牌，每次请求到达会消耗掉桶内X个令牌，一旦桶内剩余令牌≤X则请求放入缓存区等待或者丢弃。</p>
+<p><img alt="[Token Bucket 原理图](https://www.quora.com/What-is-the-difference-between-token-bucket-and-leaky-bucket-algorithms)" title="Token Bucket 原理图" data-src="/images/token_bucket.gif" class="lazyload"></p>
+<p>令牌桶对于不同突发状况有比较好的处理能力，以Google的Java开源项目<a href="https://github.com/google/guava/blob/master/guava/src/com/google/common/util/concurrent/RateLimiter.java" target="_blank" rel="noopener">Guava</a><sup>[4]</sup>为例，针对RateLimiter提供了两个实用的子类：平滑突发限流（SmoothBusrty）和平滑预热限流（SmoothWarmingUp）。</p>
+<p>SmoothBursty能够很好地应对突发流量。当流量突然变大的时候，会立刻消耗掉桶内令牌，之后流量输出取决于令牌自增速率，达到一个平缓的输出速率；当流量突然变小的时候，流量会立即消耗掉桶内令牌。输出流量会呈现一个逼近恒定速率的趋势，但是具体速率由实时系统流量和令牌自增速率共同<strong>动态</strong>决定。</p>
+<p>SmoothWarmingUp适用于<strong>下游服务需要预热</strong>的场景。创建限流器的时候可以设定参数如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 令牌自增速率为2个/秒，缓冲时间为3s</span></span><br><span class="line">RateLimiter r = RateLimiter.create(<span class="number">2</span>,<span class="number">3</span>,TimeUnit.SECONDS);</span><br></pre></td></tr></table></figure>
+<p>在这样的设置下，在前3s令牌不会每0.5s发放一次，而是会形成平缓线性下降的坡度。比方说1.5s发放第一个，0.9s发放第二个，0.6s发放第三个。在3s之后，发放速率会恢复设定的速率。</p>
+<h1 id="漏桶-vs-令牌桶"><a href="#漏桶-vs-令牌桶" class="headerlink" title="漏桶 vs 令牌桶"></a>漏桶 vs 令牌桶</h1><ol>
+<li>漏桶输出速率恒定，令牌桶输出速率由令牌自增速率与输入流量决定。增加令牌自增速率能够提高限流器上限。有突发流量（burst）时令牌桶输出速率可以动态提高</li>
+<li>当漏桶满了之后，输入流量会被丢弃。当令牌桶满了之后，输入可以被缓存或者丢弃；</li>
+</ol>
+<p>一般来说漏桶被用在traffic policing的场景中，即network需要满足某一个contract，一旦超过contract，traffic shaping就会拒绝多余的流量请求，保证传输带宽；令牌桶多用在rate limit的场景中，更加灵活和动态。Uber的批处理系统中对限流的处理就运用到了这种令牌桶的设计原理。</p>
+<h1 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h1><ul>
+<li>[1] <a href="https://www.quora.com/What-is-the-difference-between-token-bucket-and-leaky-bucket-algorithms" target="_blank" rel="noopener">https://www.quora.com/What-is-the-difference-between-token-bucket-and-leaky-bucket-algorithms</a> “What is the difference between token bucket and leaky bucket algorithms?”</li>
+<li>[2] <a href="https://www.figma.com/blog/an-alternative-approach-to-rate-limiting/" target="_blank" rel="noopener">https://www.figma.com/blog/an-alternative-approach-to-rate-limiting/</a> “An alternative approach to rate limiting”</li>
+<li>[3] <a href="https://mp.weixin.qq.com/s/b4yqLSqNz7_vcGLRmhG0rw" target="_blank" rel="noopener">https://mp.weixin.qq.com/s/b4yqLSqNz7_vcGLRmhG0rw</a> “高并发系统中的限流应该如何做？”</li>
+<li>[4] <a href="https://github.com/google/guava" target="_blank" rel="noopener">https://github.com/google/guava</a> “google/guava”</li>
+</ul>
+</div></article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E9%AB%98%E5%B9%B6%E5%8F%91/">高并发    </a></div><div class="post_share"></div></div><div class="post-reward"><a class="reward-button"><i class="fa fa-qrcode"></i> 打赏<div class="reward-main"><ul class="reward-all"><li class="reward-item"><img class="lazyload post-qr-code__img" src="/images/wechatpay.jpg"><div class="post-qr-code__desc">微信</div></li></ul></div></a></div><nav class="pagination_post" id="pagination"><div class="prev-post pull-full"><a href="/2019/12/15/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E7%86%94%E6%96%AD/"><img class="prev_cover lazyload" data-src="https://cdn.jsdelivr.net/gh/jerryc127/CDN@latest/cover/default_bg.png" onerror="onerror=null;src='/img/404.jpg'"><div class="label">上一篇</div><div class="prev_info"><span>高并发系统的降级处理——熔断</span></div></a></div></nav><div class="relatedPosts"><div class="relatedPosts_headline"><i class="fa fa-fw fa-thumbs-up" aria-hidden="true"></i><span> 相关推荐</span></div><div class="relatedPosts_list"><div class="relatedPosts_item"><a href="/2019/12/25/Golang调度器原理解析/" title="Golang调度器原理解析"><img class="relatedPosts_cover lazyload"data-src="/images/scheduler_concepts.png"><div class="relatedPosts_title">Golang调度器原理解析</div></a></div><div class="relatedPosts_item"><a href="/2019/12/15/高并发系统的降级处理——熔断/" title="高并发系统的降级处理——熔断"><img class="relatedPosts_cover lazyload"data-src="https://cdn.jsdelivr.net/gh/jerryc127/CDN@latest/cover/default_bg.png"><div class="relatedPosts_title">高并发系统的降级处理——熔断</div></a></div><div class="relatedPosts_item"><a href="/2019/12/19/高并发系统的降级处理——减载/" title="高并发系统的降级处理——减载"><img class="relatedPosts_cover lazyload"data-src="/images/load_shedding.png"><div class="relatedPosts_title">高并发系统的降级处理——减载</div></a></div></div><div class="clear_both"></div></div><hr><div id="post-comment"><div class="comment_headling"><i class="fa fa-comments fa-fw" aria-hidden="true"></i><span> 评论</span></div><div id="disqus_thread"></div><script>var unused = null;
+var disqus_config = function () {
+  this.page.url = 'http://qinqiyao.com/2019/12/11/%E9%AB%98%E5%B9%B6%E5%8F%91%E7%B3%BB%E7%BB%9F%E7%9A%84%E9%99%8D%E7%BA%A7%E5%A4%84%E7%90%86%E2%80%94%E2%80%94%E9%99%90%E6%B5%81/';
+  this.page.identifier = '2019/12/11/高并发系统的降级处理——限流/';
+  this.page.title = '高并发系统的降级处理——限流';
+}
+var d = document, s = d.createElement('script');
+s.src = "https://" + 'qinqiyao' +".disqus.com/embed.js";
+s.setAttribute('data-timestamp', '' + +new Date());
+(d.head || d.body).appendChild(s);</script></div></div></div><footer id="footer" style="background-image: url(/images/rate_limiter.png)"><div id="footer-wrap"><div class="copyright">&copy;2019 By Qiyao Qin</div><div class="footer_custom_text">嗝。</div></div></footer></div><section class="rightside" id="rightside"><div id="rightside-config-hide"><i class="fa fa-book" id="readmode" title="阅读模式"></i><i class="fa fa-plus" id="font_plus" title="放大字体"></i><i class="fa fa-minus" id="font_minus" title="缩小字体"></i><i class="darkmode fa fa-moon-o" id="darkmode" title="夜间模式"></i></div><div id="rightside-config-show"><div id="rightside_config" title="设置"><i class="fa fa-cog" aria-hidden="true"></i></div><a id="to_comment" href="#post-comment" title="直达评论"><i class="scroll_to_comment fa fa-comments">  </i></a><i class="fa fa-list-ul close" id="mobile-toc-button" title="目录" aria-hidden="true"></i><i class="fa fa-arrow-up" id="go-up" title="回到顶部" aria-hidden="true"></i></div></section><script src="https://cdn.jsdelivr.net/npm/jquery@latest/dist/jquery.min.js"></script><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/medium-zoom/dist/medium-zoom.min.js"></script><script async src="/js/search/local-search.js"></script><script id="canvas_nest" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="/js/third-party/canvas-nest.js"></script><script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@latest/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/lazysizes@latest/lazysizes.min.js" async=""></script><div class="search-dialog" id="local-search"><div class="search-dialog__title" id="local-search-title">本地搜索</div><div id="local-input-panel"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章"></div></div></div><hr><div id="local-search-results"><div id="local-hits"></div><div id="local-stats"><div class="local-search-stats__hr" id="hr"><span>由</span> <a href="https://github.com/wzpan/hexo-generator-search" target="_blank" rel="noopener" style="color:#49B1F5;">hexo-generator-search</a>
+ <span>提供支持</span></div></div></div><span class="search-close-button"><i class="fa fa-times"></i></span></div><div class="search-mask"></div></body></html>
