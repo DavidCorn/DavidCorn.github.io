@@ -94,6 +94,15 @@ ignore:
 ## Themes: https://hexo.io/themes/
 theme: Butterfly 
 
+Plugins:
+- hexo-generator-baidu-sitemap
+- hexo-generator-sitemap
+
+baidusitemap:
+    path: baidusitemap.xml
+sitemap:
+    path: sitemap.xml
+
 # Deployment
 ## Docs: https://hexo.io/docs/deployment.html
 deploy:
