@@ -4,6 +4,7 @@ date: 2019-12-25 15:28:40
 tags: 高并发
 categories: 编程语言
 description: 调度器 (Scheduler) 使得多个Goroutine可以在多个内核线程 (thread) 上运行。大部分Goroutine的切换没有OS线程切换时的开销，使得整体运行效率比OS线程调度效率高很多。
+cover: /images/scheduler_concepts.png
 ---
 
 ## 前置知识
