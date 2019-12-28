@@ -1,6 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>如何从Hive中获取最大分区数据</title>
+    <url>/2019/12/28/%E5%A6%82%E4%BD%95%E4%BB%8EHive%E4%B8%AD%E8%8E%B7%E5%8F%96%E6%9C%80%E5%A4%A7%E5%88%86%E5%8C%BA%E6%95%B0%E6%8D%AE/</url>
+    <content><![CDATA[<h1 id="案例分析"><a href="#案例分析" class="headerlink" title="案例分析"></a>案例分析</h1><p>最近在工作中遇到了这样一个场景：我们有一个Hive table，分区 (partition) 按照日期划分。ETL pipeline需要在执行过程中选择日期最近的分区数据。在Spark环境下，最直接的做法是这样的：</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">most_recent_date = spark.sql(</span><br><span class="line">	<span class="string">"SELECT max(partition_name) from table_name"</span></span><br><span class="line">).first()[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line"><span class="comment"># 当然在实际代码中不要使用 SELECT * 这种语法，这里只是为了方便起见。</span></span><br><span class="line">result = spark.sql(</span><br><span class="line">	<span class="string">"""</span></span><br><span class="line"><span class="string">	SELECT * FROM table_name where partition_name = &#123;partition&#125;</span></span><br><span class="line"><span class="string">	"""</span>.format(partition=most_recent_date)</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>利用Spark进行数据处理，对3TB/单一partition的数据集，花费时间为117s。在查阅相关资料<sup>[1]</sup>后我发现还有另外一种做法，通过show table的方式拿到所有的partition然后选择最新的partition。PySpark实现方法如下：</p>
+<figure class="highlight python"><table><tr><td class="code"><pre><span class="line">most_recent_date = spark.sql(</span><br><span class="line">	<span class="string">"SHOW PARTITIONS table_name"</span></span><br><span class="line">).rdd.flatMap(</span><br><span class="line">	<span class="keyword">lambda</span> x: x</span><br><span class="line">).map(</span><br><span class="line">	<span class="keyword">lambda</span> x: x.replace(<span class="string">'partition_name='</span>, <span class="string">''</span>)</span><br><span class="line">).max()</span><br><span class="line"></span><br><span class="line">result = spark.sql(</span><br><span class="line">	<span class="string">"""</span></span><br><span class="line"><span class="string">	SELECT * FROM table_name where partition_name = &#123;partition&#125;</span></span><br><span class="line"><span class="string">	"""</span>.format(partition=most_recent_date)</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>用同样的数据集进行测试，花费时间降低到了0.2s。之所以有这么大的改进，原因要从Hive的架构说起。</p>
+<h1 id="Hive架构"><a href="#Hive架构" class="headerlink" title="Hive架构"></a>Hive架构</h1><p><img alt="Hive Architecture" title="Hive Architecture" data-src="/images/hive_arch.png" class="lazyload"></p>
+<p>Hive的架构可以大致分为四层：</p>
+<ol>
+<li>用户接口 (CLI，JDBC)。用户可以通过终端交互(CLI)的方式与Hive进行连接，同时Hive也有基于JDBC (Java Database Connectivity)连接至Hive的服务；</li>
+<li>驱动引擎 Driver。Hive的驱动引擎包含了解析、编译、优化和执行，生成等过程；</li>
+<li>计算层。计算层Hive支持MapReduce，Tez，Spark等多种计算引擎；</li>
+<li>存储层。Hive数据存储包括两个方面，一个是元数据的存储，另一个是数据的持久化。</li>
+</ol>
+<p>值得注意的是，在客户端与Driver之间，存在着跨语言服务 (thrift server)，集成多种语言帮助用户调用Hive接口。接下来我们主要来看存储层。</p>
+<h2 id="元数据-Metadata-的存储"><a href="#元数据-Metadata-的存储" class="headerlink" title="元数据 (Metadata) 的存储"></a>元数据 (Metadata) 的存储</h2><p>Hive元数据主要包括表名，列和分区的属性，以及表的属性（内部表还是外部表）等等。数据库、表、分区对应HDFS下的目录。</p>
+<p>Hive的元数据默认会存在Hive自带的Derby数据库中。Derby存在的问题是多用户连接操作支持不是很好，并且数据库目录不固定，不方便管理。一般生产环境中我们使用Mysql存储元数据。Mysql与Hive之间通过metastore进行交互。</p>
+<h2 id="数据存储"><a href="#数据存储" class="headerlink" title="数据存储"></a>数据存储</h2><p><img alt="Hive Data Model" title="Hive Data Model" data-src="/images/hive_data_model.png" class="lazyload"></p>
+<p>Hive的数据存储在HDFS中，基本存储单位为表或者分区。表或者分区在Hive内部被称为SD<sup>[2]</sup> (Storage Descriptor)。SD的基本信息存储在metastore中。Hive到底层数据的查询都会转化成MapReduce或者Tez/Spark的作业。</p>
+<p>从以上介绍可以发现一点，当我们使用Hive SHOW PARTITION的时候，查询并不会跑到HDFS，而是<strong>直接与metastore进行交互拿到分区的信息</strong>，省略了MapReduce任务和各种编译、优化的环节，大大提高了查询速度。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><ol>
+<li>元数据尽量从metastore中读取，<code>SELECT *</code>并不是万金油；</li>
+<li>Hive适用于大规模数据的ETL，offline query和需要离线精确结果的场景。如果需要交互式adhoc查询最好移步Presto, Impala；</li>
+</ol>
+<h1 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h1><ul>
+<li>[1] <a href="https://stackoverflow.com/questions/55053218/pyspark-getting-latest-partition-from-hive-partitioned-column-logic" target="_blank" rel="noopener">https://stackoverflow.com/questions/55053218/pyspark-getting-latest-partition-from-hive-partitioned-column-logic</a> “pyspark - getting Latest partition from Hive partitioned column logic”</li>
+<li>[2] <a href="https://www.jianshu.com/p/4ce73f4d0bd5" target="_blank" rel="noopener">https://www.jianshu.com/p/4ce73f4d0bd5</a> “Hive原理及SQL优化”</li>
+</ul>
+]]></content>
+      <categories>
+        <category>数据库</category>
+      </categories>
+      <tags>
+        <tag>Apache Spark</tag>
+        <tag>Hive</tag>
+      </tags>
+  </entry>
+  <entry>
     <title>Golang调度器原理解析</title>
     <url>/2019/12/25/Golang%E8%B0%83%E5%BA%A6%E5%99%A8%E5%8E%9F%E7%90%86%E8%A7%A3%E6%9E%90/</url>
     <content><![CDATA[<h2 id="前置知识"><a href="#前置知识" class="headerlink" title="前置知识"></a>前置知识</h2><h3 id="什么是Goroutine"><a href="#什么是Goroutine" class="headerlink" title="什么是Goroutine"></a>什么是Goroutine</h3><p>Goroutine可以看作是轻量级的抽象thread。在编写Go代码的时候，我们会对Goroutine进行操作而不是针对thread。对于操作系统而言，thread是最小的调度单位。所以可以认为goroutine是用户层面的线程抽象。</p>
