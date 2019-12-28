@@ -6,6 +6,7 @@ tags:
 	- Hive
 categories: 数据库
 description: 本文介绍了获取Hive最新分区 (partition) 数据的方法和优化小技巧，以及背后的原理。
+cover: /images/apache_hive_icon.png
 ---
 
 # 案例分析
